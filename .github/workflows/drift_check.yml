@@ -1,0 +1,111 @@
+name: Drift Detection Check
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:          # manual trigger from Actions tab
+  schedule:
+    - cron: "0 9 * * 1"      # every Monday at 09:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  drift-check:
+    name: Run Behavioral Shift Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate synthetic data
+        run: python generate_data.py
+
+      - name: Train baseline model
+        run: python train_baseline.py
+
+      - name: Run drift detection
+        id: drift
+        run: python src/detect_drift.py
+
+      - name: Evaluate PSI thresholds
+        run: |
+          python - <<'EOF'
+          import json, sys
+
+          with open("reports/drift_summary.json") as f:
+              summary = json.load(f)
+
+          psi = summary["psi"]["category_distribution"]["score"]
+          spend_psi = summary["psi"]["spend_amount"]["score"]
+          concept = summary["concept_drift"]
+          changes = summary["category_changes"]
+
+          print("=" * 65)
+          print("  GITHUB ACTIONS — DRIFT CHECK RESULTS")
+          print("=" * 65)
+
+          # ── PSI evaluation ─────────────────────────────────────────
+          exit_code = 0
+
+          if psi > 0.25:
+              level = "🚨 CRITICAL"
+              exit_code = 1
+          elif psi > 0.10:
+              level = "⚠️  EARLY AWARENESS WARNING"
+          else:
+              level = "✅ STABLE"
+
+          print(f"\n  Category PSI:  {psi:.4f}  →  {level}")
+          print(f"  Spend PSI:     {spend_psi:.4f}")
+
+          # ── Category swings ────────────────────────────────────────
+          print("\n  Category Changes:")
+          for cat, info in changes.items():
+              arrow = "↑" if info["change_pct"] > 0 else "↓"
+              flag = " ⚠" if abs(info["change_pct"]) > 20 else ""
+              print(f"    {cat:<15s} {info['reference_share']:5.1f}% → "
+                    f"{info['current_share']:5.1f}%  "
+                    f"({arrow} {abs(info['change_pct']):.1f}%){flag}")
+
+          # ── Concept drift ──────────────────────────────────────────
+          ref_acc = concept["reference_accuracy"] * 100
+          cur_acc = concept["current_accuracy"] * 100
+          drop = concept["accuracy_drop_pp"]
+          print(f"\n  Model Accuracy: {ref_acc:.1f}% → {cur_acc:.1f}%  "
+                f"(drop: {drop:.1f} pp)")
+
+          if concept["flagged"]:
+              print("  ⚠️  Concept drift detected — model retraining recommended")
+
+          print("=" * 65)
+
+          # ── Fail the workflow on critical PSI ──────────────────────
+          if psi > 0.10:
+              print(f"\n::warning::Category PSI {psi:.4f} exceeds early-awareness "
+                    f"threshold (0.10). Review category distribution shifts.")
+
+          if psi > 0.25:
+              print(f"\n::error::Category PSI {psi:.4f} exceeds critical threshold "
+                    f"(0.25). Immediate investigation required.")
+
+          sys.exit(exit_code)
+          EOF
+
+      - name: Upload drift reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-reports
+          path: reports/
+          retention-days: 30
