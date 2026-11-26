@@ -1,0 +1,55 @@
+{
+  "alert_triggered": true,
+  "psi": {
+    "category_distribution": {
+      "score": 0.1749,
+      "threshold": 0.25,
+      "flagged": false,
+      "breakdown": {
+        "Electronics": 0.1011,
+        "Clothing": 0.0002,
+        "Home Goods": 0.0725,
+        "Groceries": 0.0011
+      }
+    },
+    "spend_amount": {
+      "score": 0.043,
+      "threshold": 0.25,
+      "flagged": false
+    }
+  },
+  "category_changes": {
+    "Electronics": {
+      "reference_share": 29.99,
+      "current_share": 15.16,
+      "change_pct": -49.44
+    },
+    "Clothing": {
+      "reference_share": 25.13,
+      "current_share": 24.38,
+      "change_pct": -2.97
+    },
+    "Home Goods": {
+      "reference_share": 20.43,
+      "current_share": 34.36,
+      "change_pct": 68.22
+    },
+    "Groceries": {
+      "reference_share": 24.45,
+      "current_share": 26.09,
+      "change_pct": 6.7
+    }
+  },
+  "concept_drift": {
+    "reference_accuracy": 0.8172,
+    "current_accuracy": 0.6261,
+    "accuracy_drop_pp": 19.11,
+    "threshold_pp": 5.0,
+    "flagged": true
+  },
+  "data_sizes": {
+    "reference_records": 4151,
+    "current_records": 5849
+  },
+  "evidently_report": "reports\\drift_report.html"
+}
